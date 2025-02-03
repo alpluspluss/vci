@@ -11,8 +11,8 @@ and optional colored output.
 
 </div>
 
-![WARNING]
-> vci is currently supported on Unix-based operating system.
+> [!WARNING]
+> vci is currently supported on Unix-based operating system
 
 ## Examples
 
