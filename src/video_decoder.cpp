@@ -7,7 +7,7 @@ namespace vci
     {
         // maybe I'll lift this off because
         // rn the warning is so damn annoying
-        av_log_set_level(AV_LOG_ERROR);
+        // av_log_set_level(AV_LOG_ERROR);
         if (avformat_open_input(&fmt_ctx, filename, nullptr, nullptr) < 0)
             throw std::runtime_error("[vci]: could not open file");
 
@@ -86,7 +86,7 @@ namespace vci
 
                 rgb_data.resize(codec_ctx->width * codec_ctx->height * 3);
                 uint8_t *rgb_dst[] = { rgb_data.data() };
-                int rgb_stride[] = { codec_ctx->width * 3 };
+                const int rgb_stride[] = { codec_ctx->width * 3 };
 
                 sws_scale(sws_ctx, frame->data, frame->linesize, 0,
                           codec_ctx->height, rgb_dst, rgb_stride);
@@ -99,20 +99,20 @@ namespace vci
         return false;
     }
 
-    // IDK why the compiler keeps warning this is not safe
+    // IDK why the lint keeps being paranoid that this is unsafe
     // when I literally check for the existent of the pointer
-    int VideoDecoder::get_width() const noexcept
+    [[nodiscard]] int VideoDecoder::get_width() const noexcept
     {
         return codec_ctx ? codec_ctx->width : 0;
     }
 
     // same goes for this thing
-    int VideoDecoder::get_height() const noexcept
+    [[nodiscard]] int VideoDecoder::get_height() const noexcept
     {
         return codec_ctx ? codec_ctx->height : 0;
     }
 
-    double VideoDecoder::get_fps() const noexcept
+    [[nodiscard]] double VideoDecoder::get_fps() const noexcept
     {
         return fmt_ctx && video_stream_idx >= 0
             ? av_q2d(fmt_ctx->streams[video_stream_idx]->r_frame_rate)

@@ -1,23 +1,28 @@
 #include <vci/ascii.hpp>
+#include <array>
 
 namespace vci
 {
-    constexpr char ASCII_CHARS[] = " .:-=+*#%@";
-    constexpr int ASCII_CHARS_LEN = sizeof(ASCII_CHARS) - 1;
+    constexpr auto TERM_RATIO = 0.5f;
+    constexpr std::array<char, 10> ASCII_CHARS = {' ', '.', ':', '-', '=', '+', '*', '#', '%', '@'};
 
-    char pixel_to_ascii(const uint8_t gray)
+    inline char pixel_to_ascii(const uint8_t gray)
     {
-        const int index = (gray * (ASCII_CHARS_LEN - 1)) / 255;
+        // map 0-255 to our character array indices
+        // using the inverted gray value as darker pixels should map to denser characters
+        const uint8_t inverted = gray;
+        const size_t index = (inverted * (ASCII_CHARS.size() - 1)) / 255;
         return ASCII_CHARS[index];
     }
 
 #if defined(__ARM_NEON)
 #include <arm_neon.h>
-    void rgb_to_gray(const uint8_t *rgb, uint8_t *gray, size_t pixels)
+    void rgb_to_gray(const uint8_t *rgb, uint8_t *gray, const size_t pixels)
     {
-        const uint8x8_t r_weights = vdup_n_u8(76);
-        const uint8x8_t g_weights = vdup_n_u8(150);
-        const uint8x8_t b_weights = vdup_n_u8(29);
+        /* standard ITU-R BT.601 weights for RGB to grayscale conversion */
+        const uint8x8_t r_weights = vdup_n_u8(76);  // 0.299
+        const uint8x8_t g_weights = vdup_n_u8(150); // 0.587
+        const uint8x8_t b_weights = vdup_n_u8(29);  // 0.114
 
         for (size_t i = 0; i < pixels; i += 8)
         {
@@ -29,64 +34,66 @@ namespace vci
 
             uint16x8_t sum = vaddq_u16(vaddq_u16(r, g), b);
             uint8x8_t result = vshrn_n_u16(sum, 8);
-
             vst1_u8(gray + i, result);
         }
     }
 #else
     void rgb_to_gray(const uint8_t *rgb, uint8_t *gray, size_t pixels)
     {
+        /* standard ITU-R BT.601 weights for RGB to grayscale conversion */
         for (size_t i = 0; i < pixels; ++i)
-        {
             gray[i] = (rgb[i * 3] * 76 + rgb[i * 3 + 1] * 150 + rgb[i * 3 + 2] * 29) >> 8;
-        }
     }
 #endif
 
-    std::string frame_to_ascii(const std::vector<uint8_t>& rgb_data, const int width, const int height,
-                          const int term_width, const int term_height)
+    std::string frame_to_ascii(const std::vector<uint8_t> &rgb_data, const int width, const int height,
+                               const int term_width)
     {
         std::vector<uint8_t> gray_data(static_cast<size_t>(width * height));
         rgb_to_gray(rgb_data.data(), gray_data.data(), width * height);
+        
+        const auto target_width = static_cast<std::size_t>(term_width);
+        const auto width_ratio = static_cast<float>(term_width) * static_cast<float>(height);
+        const auto target_height = static_cast<std::size_t>(
+            (width_ratio / static_cast<float>(width)) * TERM_RATIO
+        );
 
-        const float scale_x = static_cast<float>(width) / static_cast<float>(term_width);
-        const float scale_y = static_cast<float>(height) / (static_cast<float>(term_height) * 2.0f);
+        const auto scale_x = static_cast<float>(width) / static_cast<float>(target_width);
+        const auto scale_y = static_cast<float>(height) / static_cast<float>(target_height);
 
         std::string result;
-        result.reserve(term_width * term_height + term_height); // +term_height for newlines
+        result.reserve(target_width * target_height + target_height);
 
-        /* pre-calculate the positions and offsets
-          for better cache coherency
-          TODO: loop unrolling */
-        std::vector<int> x_positions(static_cast<size_t>(term_width));
-        for (auto x = 0; x < term_width; ++x)
+        std::vector<std::size_t> x_positions(target_width);
+        std::vector<std::size_t> y_positions(target_height);
+        std::vector<std::size_t> row_offsets(static_cast<std::size_t>(height));
+        for (std::size_t x = 0; x < target_width; ++x)
         {
-            const auto scaled_x = static_cast<int>(static_cast<float>(x) * scale_x);
-            x_positions[static_cast<size_t>(x)] = std::min(scaled_x, width - 1);
+            const auto scaled_x = static_cast<float>(x) * scale_x;
+            x_positions[x] = std::min(
+                static_cast<std::size_t>(scaled_x),
+                static_cast<std::size_t>(width - 1)
+            );
         }
 
-        std::vector<int> y_positions(static_cast<size_t>(term_height));
-        for (auto y = 0; y < term_height; ++y)
+        for (std::size_t y = 0; y < target_height; ++y)
         {
-            const auto scaled_y = static_cast<int>(static_cast<float>(y) * scale_y);
-            y_positions[static_cast<size_t>(y)] = std::min(scaled_y, height - 1);
+            const auto scaled_y = static_cast<float>(y) * scale_y;
+            y_positions[y] = std::min(
+                static_cast<std::size_t>(scaled_y),
+                static_cast<std::size_t>(height - 1)
+            );
         }
 
-        std::vector<int> row_offsets(static_cast<size_t>(height));
-        for (auto y = 0; y < height; ++y)
-        {
-            row_offsets[static_cast<size_t>(y)] = y * width;
-        }
+        for (std::size_t y = 0; y < static_cast<std::size_t>(height); ++y)
+            row_offsets[y] = y * static_cast<std::size_t>(width);
 
-        for (auto y = 0; y < term_height; ++y)
+        for (std::size_t y = 0; y < target_height; ++y)
         {
-            const int base_offset = row_offsets[static_cast<size_t>(y_positions[static_cast<size_t>(y)])];
-
-            for (auto x = 0; x < term_width; ++x)
+            const auto base_offset = row_offsets[y_positions[y]];
+            for (std::size_t x = 0; x < target_width; ++x)
             {
-                const uint8_t pixel = gray_data[(
-                    base_offset + x_positions[static_cast<size_t>(x)]
-                )];
+                const auto pixel = gray_data[base_offset + x_positions[x]];
                 result += pixel_to_ascii(pixel);
             }
             result += '\n';

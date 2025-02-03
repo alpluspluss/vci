@@ -4,6 +4,7 @@
 #include <vci/terminal.hpp>
 #include <vci/video_decoder.hpp>
 
+// TODO: QoL improvements for the CLI
 int main(const int argc, const char* argv[])
 {
     if (argc != 2)
@@ -30,8 +31,7 @@ int main(const int argc, const char* argv[])
                 rgb_frame,
                 decoder.get_width(),
                 decoder.get_height(),
-                term_size.cols,
-                term_size.rows - 1  // leave one line for status
+                term_size.cols
             );
             std::cout << ascii_frame;
 
