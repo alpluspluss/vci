@@ -11,10 +11,22 @@ and optional colored output.
 
 </div>
 
+![WARNING]
+> vci is currently supported on Unix-based operating system.
+
+## Examples
+
+TBA
+
+## Dependencies
+
+- FFmpeg
+
 ## Building
 
 ```shell
 #!/usr/bin/env sh
+
 mkdir build && cd build
 cmake ..
 make -j$(nproc)
@@ -24,7 +36,10 @@ make -j$(nproc)
 
 ```shell
 #!/usr/bin/env sh
-# In your
+
+# After building...
+# In build/
+sudo make install
 ```
 
 ## Usage
