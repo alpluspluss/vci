@@ -1,0 +1,8 @@
+build/
+/.idea/.gitignore
+/.idea/.name
+/.idea/editor.xml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/vcs.xml
+/.idea/vidascii.iml
